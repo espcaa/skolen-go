@@ -17,6 +17,11 @@ type Client struct {
 	UserInfo   *types.UserInfo `json:"userInfo,omitempty"`
 }
 
+type authTransport struct {
+	Base   http.RoundTripper
+	Client *Client // whatever type your client is
+}
+
 type OIDCClient struct {
 	ClientID     string `json:"-"`
 	ClientSecret string `json:"-"`
@@ -80,5 +85,17 @@ func NewClientFromJSON(data []byte) (*Client, error) {
 	}
 	client.UserInfo = userInfo
 
+	// set the http headers
+
+	client.HTTP.Transport = &authTransport{
+		Base: http.DefaultTransport,
+	}
+
 	return &client, nil
+}
+
+func (t *authTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	req.Header.Set("Authorization", "Bearer "+t.Client.TokenSet.AccessToken)
+	req.Header.Set("x-skolengo-ems-code", t.Client.School.EmsCode)
+	return t.Base.RoundTrip(req)
 }

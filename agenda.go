@@ -26,7 +26,7 @@ func (c *Client) GetTimetable(userID, schoolID, emsCode string, periodStart, per
 		limit = 50
 	}
 
-	req, err := http.NewRequest("GET", fmt.Sprintf("%s/user-agenda", c.BaseURL), nil)
+	req, err := http.NewRequest("GET", fmt.Sprintf("%s/agendas", c.BaseURL), nil)
 	if err != nil {
 		return nil, err
 	}

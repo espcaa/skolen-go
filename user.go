@@ -13,7 +13,7 @@ func (c *Client) GetBasicUserInfo() (*types.UserInfo, error) {
 		return nil, fmt.Errorf("access token not set")
 	}
 
-	req, err := http.NewRequest("GET", c.BaseURL+"/user-info", nil)
+	req, err := http.NewRequest("GET", c.BaseURL+"/users-info", nil)
 	if err != nil {
 		return nil, err
 	}
