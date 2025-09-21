@@ -4,8 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
+	"strings"
 
 	"github.com/espcaa/skolen-go/types"
+	"github.com/golang-jwt/jwt/v4"
 )
 
 func (c *Client) GetBasicUserInfo() (*types.UserInfo, error) {
@@ -13,7 +16,34 @@ func (c *Client) GetBasicUserInfo() (*types.UserInfo, error) {
 		return nil, fmt.Errorf("access token not set")
 	}
 
-	req, err := http.NewRequest("GET", c.BaseURL+"/users-info", nil)
+	token, _, err := new(jwt.Parser).ParseUnverified(c.TokenSet.AccessToken, jwt.MapClaims{})
+	if err != nil {
+		return nil, err
+	}
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok {
+		return nil, fmt.Errorf("could not parse claims")
+	}
+	userID, ok := claims["sub"].(string)
+	if !ok {
+		return nil, fmt.Errorf("sub claim missing from token")
+	}
+
+	baseUrl := strings.TrimRight(c.BaseURL, "/")
+	endpoint := fmt.Sprintf("%s/users-info/%s", baseUrl, userID)
+	query := url.Values{}
+	query.Set("include", "school,students,students.school,schools,prioritySchool")
+	query.Set("fields[userInfo]", "lastName,firstName,photoUrl,externalMail,mobilePhone,audienceId,permissions")
+	query.Set("fields[school]", "name,timeZone,subscribedServices,city,schoolAudience,administrativeId")
+	query.Set("fields[legalRepresentativeUserInfo]", "addressLines,postalCode,city,country,students")
+	query.Set("fields[studentUserInfo]", "className,dateOfBirth,regime,school")
+	query.Set("fields[teacherUserInfo]", "schools,prioritySchool")
+	query.Set("fields[localAuthorityStaffUserInfo]", "schools,prioritySchool")
+	query.Set("fields[nonTeachingStaffUserInfo]", "schools,prioritySchool")
+	query.Set("fields[otherPersonUserInfo]", "schools,prioritySchool")
+	query.Set("fields[student]", "firstName,lastName,photoUrl,className,dateOfBirth,regime,school")
+
+	req, err := http.NewRequest("GET", endpoint+"?"+query.Encode(), nil)
 	if err != nil {
 		return nil, err
 	}
