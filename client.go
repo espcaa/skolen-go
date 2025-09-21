@@ -4,14 +4,17 @@ import (
 	"encoding/json"
 	"net/http"
 	"time"
+
+	"github.com/espcaa/skolen-go/types"
 )
 
 type Client struct {
-	HTTP       *http.Client `json:"-"`
-	TokenSet   TokenSet     `json:"tokenSet"`
-	School     School       `json:"school"`
-	BaseURL    string       `json:"-"`
-	OIDCClient OIDCClient   `json:"-"`
+	HTTP       *http.Client    `json:"-"`
+	TokenSet   TokenSet        `json:"tokenSet"`
+	School     School          `json:"school"`
+	BaseURL    string          `json:"-"`
+	OIDCClient OIDCClient      `json:"-"`
+	UserInfo   *types.UserInfo `json:"userInfo,omitempty"`
 }
 
 type OIDCClient struct {
@@ -24,6 +27,7 @@ type School struct {
 	ID                  string `json:"id"`
 	Name                string `json:"name"`
 	EmsOIDCWellKnownURL string `json:"emsOIDCWellKnownUrl"`
+	EmsCode             string `json:"emsCode"`
 	HomePageURL         string `json:"homePageUrl"`
 }
 
