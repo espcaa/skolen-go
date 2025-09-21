@@ -72,5 +72,13 @@ func NewClientFromJSON(data []byte) (*Client, error) {
 	client.OIDCClient.ClientSecret = SkolenGoConstants.OIDCClientSecret
 	client.OIDCClient.RedirectURI = SkolenGoConstants.RedirectURI
 
+	// get userinfo
+
+	var userInfo, err = client.GetBasicUserInfo()
+	if err != nil {
+		return nil, err
+	}
+	client.UserInfo = userInfo
+
 	return &client, nil
 }
