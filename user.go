@@ -31,6 +31,9 @@ func (c *Client) GetBasicUserInfo() (*types.UserInfo, error) {
 
 	baseUrl := strings.TrimRight(c.BaseURL, "/")
 	endpoint := fmt.Sprintf("%s/users-info/%s", baseUrl, userID)
+
+	fmt.Println(endpoint)
+
 	query := url.Values{}
 	query.Set("include", "school,students,students.school,schools,prioritySchool")
 	query.Set("fields[userInfo]", "lastName,firstName,photoUrl,externalMail,mobilePhone,audienceId,permissions")
@@ -49,7 +52,7 @@ func (c *Client) GetBasicUserInfo() (*types.UserInfo, error) {
 	}
 
 	req.Header.Set("Authorization", "Bearer "+c.TokenSet.AccessToken)
-	req.Header.Set("x-skolengo-ems-code", c.School.EmsOIDCWellKnownURL)
+	req.Header.Set("x-skolengo-ems-code", c.School.EmsCode)
 
 	resp, err := c.HTTP.Do(req)
 	if err != nil {
@@ -58,7 +61,8 @@ func (c *Client) GetBasicUserInfo() (*types.UserInfo, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("unexpected status: %s", resp.Status)
+		// Read the body
+		return nil, fmt.Errorf("unexpected status %d:", resp.StatusCode)
 	}
 
 	var payload struct {

@@ -10,9 +10,32 @@ import (
 	utils "github.com/espcaa/skolen-go/utils"
 )
 
+func getString(m map[string]interface{}, key string) string {
+	if v, ok := m[key]; ok && v != nil {
+		if s, ok := v.(string); ok {
+			return s
+		}
+	}
+	return ""
+}
+
 type BaseResponse struct {
 	Data     []map[string]interface{} `json:"data"`
 	Included []map[string]interface{} `json:"included"`
+}
+
+func getBool(m map[string]interface{}, key string) bool {
+	if v, ok := m[key]; ok && v != nil {
+		if b, ok := v.(bool); ok {
+			return b
+		}
+	}
+	return false
+}
+
+func parseTime(str string) time.Time {
+	t, _ := time.Parse(time.RFC3339, str)
+	return t
 }
 
 func (c *Client) GetTimetable(userID, schoolID, emsCode string, periodStart, periodEnd time.Time, limit int) ([]types.TimetableDay, error) {
@@ -54,97 +77,132 @@ func (c *Client) GetTimetable(userID, schoolID, emsCode string, periodStart, per
 		return nil, err
 	}
 
+	// Map all included items for quick lookup
 	includedMap := make(map[string]map[string]interface{})
 	for _, item := range baseResp.Included {
-		key := fmt.Sprintf("%s:%s", item["type"], item["id"])
-		includedMap[key] = item
+		id := getString(item, "id")
+		typ := getString(item, "type")
+		if id != "" && typ != "" {
+			includedMap[fmt.Sprintf("%s:%s", typ, id)] = item
+		}
 	}
 
 	var result []types.TimetableDay
 	for _, day := range baseResp.Data {
-		rawLessons := utils.GetMultipleRelations(day["relationships"].(map[string]interface{})["lessons"].(map[string]interface{}))
-		rawAssignments := utils.GetMultipleRelations(day["relationships"].(map[string]interface{})["homeworkAssignments"].(map[string]interface{}))
+		dayAttr, ok := day["attributes"].(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		relationships, ok := day["relationships"].(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		rawLessons := utils.GetMultipleRelations(relationships["lessons"].(map[string]interface{}))
+		rawAssignments := utils.GetMultipleRelations(relationships["homeworkAssignments"].(map[string]interface{}))
 
 		var lessons []types.Lesson
-		var assignments []types.Assignment
-
 		for _, rawLesson := range rawLessons {
-			lessonID := rawLesson["id"].(string)
-			lessonData := includedMap["lesson:"+lessonID]
+			lessonID := getString(rawLesson, "id")
+			lessonData, ok := includedMap["lesson:"+lessonID]
+			if !ok {
+				continue
+			}
 
-			subjectID := utils.GetSingleRelation(lessonData["relationships"].(map[string]interface{})["subject"].(map[string]interface{}))["id"].(string)
-			subjectData := includedMap["subject:"+subjectID]
+			attr, ok := lessonData["attributes"].(map[string]interface{})
+			if !ok {
+				continue
+			}
+
+			subjectRel := utils.GetSingleRelation(lessonData["relationships"].(map[string]interface{})["subject"].(map[string]interface{}))
+			subject := types.Subject{}
+			if subjectRel != nil {
+				subjID := getString(subjectRel, "id")
+				if subjData, ok := includedMap["subject:"+subjID]; ok {
+					subjAttr := subjData["attributes"].(map[string]interface{})
+					subject = types.Subject{
+						ID:    subjID,
+						Label: getString(subjAttr, "label"),
+						Color: getString(subjAttr, "color"),
+					}
+				}
+			}
 
 			var teachers []types.Teacher
-			teachersRel := utils.GetMultipleRelations(lessonData["relationships"].(map[string]interface{})["teachers"].(map[string]interface{}))
-			for _, t := range teachersRel {
-				tData := includedMap["teacher:"+t["id"].(string)]
-				teachers = append(teachers, types.Teacher{
-					ID:        t["id"].(string),
-					Title:     tData["attributes"].(map[string]interface{})["title"].(string),
-					FirstName: tData["attributes"].(map[string]interface{})["firstName"].(string),
-					LastName:  tData["attributes"].(map[string]interface{})["lastName"].(string),
-					PhotoURL:  tData["attributes"].(map[string]interface{})["photoUrl"].(string),
-				})
+			for _, t := range utils.GetMultipleRelations(lessonData["relationships"].(map[string]interface{})["teachers"].(map[string]interface{})) {
+				tID := getString(t, "id")
+				if tData, ok := includedMap["teacher:"+tID]; ok {
+					tAttr := tData["attributes"].(map[string]interface{})
+					teachers = append(teachers, types.Teacher{
+						ID:        tID,
+						Title:     getString(tAttr, "title"),
+						FirstName: getString(tAttr, "firstName"),
+						LastName:  getString(tAttr, "lastName"),
+						PhotoURL:  getString(tAttr, "photoUrl"),
+					})
+				}
 			}
 
 			lessons = append(lessons, types.Lesson{
 				ID:                          lessonID,
-				StartDateTime:               parseTime(lessonData["attributes"].(map[string]interface{})["startDateTime"].(string)),
-				EndDateTime:                 parseTime(lessonData["attributes"].(map[string]interface{})["endDateTime"].(string)),
-				Location:                    lessonData["attributes"].(map[string]interface{})["location"].(string),
-				Canceled:                    lessonData["attributes"].(map[string]interface{})["canceled"].(bool),
-				AnyContent:                  lessonData["attributes"].(map[string]interface{})["anyContent"].(bool),
-				AnyHomeworkToDoForTheLesson: lessonData["attributes"].(map[string]interface{})["anyHomeworkToDoForTheLesson"].(bool),
-				AnyHomeworkToDoAfterLesson:  lessonData["attributes"].(map[string]interface{})["anyHomeworkToDoAfterLesson"].(bool),
-				Subject: types.Subject{
-					ID:    subjectID,
-					Label: subjectData["attributes"].(map[string]interface{})["label"].(string),
-					Color: subjectData["attributes"].(map[string]interface{})["color"].(string),
-				},
-				Teachers: teachers,
+				StartDateTime:               parseTime(getString(attr, "startDateTime")),
+				EndDateTime:                 parseTime(getString(attr, "endDateTime")),
+				Location:                    getString(attr, "location"),
+				Canceled:                    getBool(attr, "canceled"),
+				AnyContent:                  getBool(attr, "anyContent"),
+				AnyHomeworkToDoForTheLesson: getBool(attr, "anyHomeworkToDoForTheLesson"),
+				AnyHomeworkToDoAfterLesson:  getBool(attr, "anyHomeworkToDoAfterLesson"),
+				Subject:                     subject,
+				Teachers:                    teachers,
 			})
 		}
 
-		for _, rawAssignment := range rawAssignments {
-			assignID := rawAssignment["id"].(string)
-			assignData := includedMap["homework:"+assignID]
+		var assignments []types.Assignment
+		for _, rawAssign := range rawAssignments {
+			assignID := getString(rawAssign, "id")
+			assignData, ok := includedMap["homework:"+assignID]
+			if !ok {
+				continue
+			}
+
+			attr, ok := assignData["attributes"].(map[string]interface{})
+			if !ok {
+				continue
+			}
 
 			subjectRel := utils.GetSingleRelation(assignData["relationships"].(map[string]interface{})["subject"].(map[string]interface{}))
-			subjectID := ""
-			subjectData := map[string]interface{}{}
+			subject := types.Subject{}
 			if subjectRel != nil {
-				subjectID = subjectRel["id"].(string)
-				subjectData = includedMap["subject:"+subjectID]
+				subjID := getString(subjectRel, "id")
+				if subjData, ok := includedMap["subject:"+subjID]; ok {
+					subjAttr := subjData["attributes"].(map[string]interface{})
+					subject = types.Subject{
+						ID:    subjID,
+						Label: getString(subjAttr, "label"),
+						Color: getString(subjAttr, "color"),
+					}
+				}
 			}
 
 			assignments = append(assignments, types.Assignment{
 				ID:                assignID,
-				Title:             assignData["attributes"].(map[string]interface{})["title"].(string),
-				HTML:              assignData["attributes"].(map[string]interface{})["html"].(string),
-				Done:              assignData["attributes"].(map[string]interface{})["done"].(bool),
-				DueDateTime:       parseTime(assignData["attributes"].(map[string]interface{})["dueDateTime"].(string)),
-				DeliverWorkOnline: assignData["attributes"].(map[string]interface{})["deliverWorkOnline"].(bool),
-				OnlineDeliverURL:  assignData["attributes"].(map[string]interface{})["onlineDeliverUrl"].(string),
-				Subject: types.Subject{
-					ID:    subjectID,
-					Label: subjectData["attributes"].(map[string]interface{})["label"].(string),
-					Color: subjectData["attributes"].(map[string]interface{})["color"].(string),
-				},
+				Title:             getString(attr, "title"),
+				HTML:              getString(attr, "html"),
+				Done:              getBool(attr, "done"),
+				DueDateTime:       parseTime(getString(attr, "dueDateTime")),
+				DeliverWorkOnline: getBool(attr, "deliverWorkOnline"),
+				OnlineDeliverURL:  getString(attr, "onlineDeliverUrl"),
+				Subject:           subject,
 			})
 		}
 
 		result = append(result, types.TimetableDay{
-			Date:        parseTime(day["attributes"].(map[string]interface{})["date"].(string)),
+			Date:        parseTime(getString(dayAttr, "date")),
 			Lessons:     lessons,
 			Assignments: assignments,
 		})
 	}
 
 	return result, nil
-}
-
-func parseTime(str string) time.Time {
-	t, _ := time.Parse(time.RFC3339, str)
-	return t
 }
