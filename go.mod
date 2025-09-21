@@ -1,4 +1,4 @@
-module github.com/espcaa/skolengo-go
+module github.com/espcaa/skolen-go
 
 go 1.24.0
 

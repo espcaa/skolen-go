@@ -23,7 +23,7 @@ func RefreshAccessToken(c *Client) error {
 		ClientSecret: c.OIDCClient.ClientSecret,
 		Endpoint:     provider.Endpoint(),
 		RedirectURL:  c.OIDCClient.RedirectURI,
-		Scopes:       []string{"openid", "profile", "email"},
+		Scopes:       []string{"openid", "profile"},
 	}
 
 	tokenSource := oauth2Config.TokenSource(context.Background(), &oauth2.Token{
