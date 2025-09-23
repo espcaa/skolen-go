@@ -66,8 +66,28 @@ func (c *Client) GetBasicUserInfo() (*types.UserInfo, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
-		// Read the body
-		return nil, fmt.Errorf("unexpected status %d:", resp.StatusCode)
+		// If we get 401 Unauthorized, try refreshing the token once more
+		if resp.StatusCode == 401 && c.TokenSet.RefreshToken != "" {
+			if refreshErr := RefreshAccessToken(c); refreshErr == nil {
+				// Token refreshed successfully, retry the request
+				req.Header.Set("Authorization", "Bearer "+c.TokenSet.AccessToken)
+				resp2, err2 := c.HTTP.Do(req)
+				if err2 != nil {
+					return nil, err2
+				}
+				defer resp2.Body.Close()
+				if resp2.StatusCode == 200 {
+					// Use the new response
+					resp = resp2
+				} else {
+					return nil, fmt.Errorf("unexpected status %d after token refresh", resp2.StatusCode)
+				}
+			} else {
+				return nil, fmt.Errorf("unexpected status %d and failed to refresh token: %v", resp.StatusCode, refreshErr)
+			}
+		} else {
+			return nil, fmt.Errorf("unexpected status %d", resp.StatusCode)
+		}
 	}
 
 	var payload struct {
