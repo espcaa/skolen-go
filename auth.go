@@ -2,10 +2,14 @@ package skolengo
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"net/http"
+	"net/url"
+	"strings"
+	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
-	"golang.org/x/oauth2"
 )
 
 func RefreshAccessToken(c *Client) error {
@@ -17,38 +21,54 @@ func RefreshAccessToken(c *Client) error {
 	if err != nil {
 		return err
 	}
+	tokenURL := provider.Endpoint().TokenURL
 
-	oauth2Config := &oauth2.Config{
-		ClientID:     c.OIDCClient.ClientID,
-		ClientSecret: c.OIDCClient.ClientSecret,
-		Endpoint:     provider.Endpoint(),
-		RedirectURL:  c.OIDCClient.RedirectURI,
-		Scopes:       []string{"openid", "profile"},
+	data := url.Values{}
+	data.Set("grant_type", "refresh_token")
+	data.Set("refresh_token", c.TokenSet.RefreshToken)
+	data.Set("client_id", c.OIDCClient.ClientID)
+	if c.OIDCClient.ClientSecret != "" {
+		data.Set("client_secret", c.OIDCClient.ClientSecret)
 	}
 
-	tokenSource := oauth2Config.TokenSource(context.Background(), &oauth2.Token{
-		RefreshToken: c.TokenSet.RefreshToken,
-	})
-
-	newToken, err := tokenSource.Token()
+	req, err := http.NewRequest("POST", tokenURL, strings.NewReader(data.Encode()))
 	if err != nil {
 		return err
 	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
-	c.TokenSet.AccessToken = newToken.AccessToken
-	if newToken.RefreshToken != "" {
-		c.TokenSet.RefreshToken = newToken.RefreshToken
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
 	}
-	c.TokenSet.ExpiresAt = newToken.Expiry
-	c.TokenSet.TokenType = newToken.TokenType
+	defer resp.Body.Close()
 
-	if scope, ok := newToken.Extra("scope").(string); ok {
-		c.TokenSet.Scope = scope
+	if resp.StatusCode != 200 {
+		return errors.New("refresh failed with status " + resp.Status)
 	}
 
-	if idToken, ok := newToken.Extra("id_token").(string); ok {
-		c.TokenSet.IDToken = idToken
+	var tokenResp struct {
+		AccessToken  string `json:"access_token"`
+		RefreshToken string `json:"refresh_token"`
+		ExpiresIn    int64  `json:"expires_in"`
+		TokenType    string `json:"token_type"`
+		Scope        string `json:"scope"`
+		IDToken      string `json:"id_token"`
 	}
+	if err := json.NewDecoder(resp.Body).Decode(&tokenResp); err != nil {
+		return err
+	}
+
+	c.TokenSet.AccessToken = tokenResp.AccessToken
+	if tokenResp.RefreshToken != "" {
+		c.TokenSet.RefreshToken = tokenResp.RefreshToken
+	}
+	if tokenResp.ExpiresIn > 0 {
+		c.TokenSet.ExpiresAt = time.Now().Add(time.Duration(tokenResp.ExpiresIn) * time.Second)
+	}
+	c.TokenSet.TokenType = tokenResp.TokenType
+	c.TokenSet.Scope = tokenResp.Scope
+	c.TokenSet.IDToken = tokenResp.IDToken
 
 	return nil
 }
