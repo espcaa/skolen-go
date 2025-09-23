@@ -12,6 +12,24 @@ import (
 	"github.com/coreos/go-oidc/v3/oidc"
 )
 
+// IsTokenExpired checks if the access token is expired or will expire within 5 minutes
+func (c *Client) IsTokenExpired() bool {
+	if c.TokenSet.AccessToken == "" {
+		return true
+	}
+	// Consider token expired if it expires within 5 minutes
+	buffer := 5 * time.Minute
+	return time.Now().Add(buffer).After(c.TokenSet.ExpiresAt)
+}
+
+// EnsureValidToken checks if the token is expired and refreshes it if needed
+func (c *Client) EnsureValidToken() error {
+	if c.IsTokenExpired() {
+		return RefreshAccessToken(c)
+	}
+	return nil
+}
+
 func RefreshAccessToken(c *Client) error {
 	if c.TokenSet.RefreshToken == "" {
 		return errors.New("no refresh token available")

@@ -12,6 +12,11 @@ import (
 )
 
 func (c *Client) GetBasicUserInfo() (*types.UserInfo, error) {
+	// Ensure we have a valid token before making the API call
+	if err := c.EnsureValidToken(); err != nil {
+		return nil, fmt.Errorf("failed to refresh token: %w", err)
+	}
+
 	if c.TokenSet.AccessToken == "" {
 		return nil, fmt.Errorf("access token not set")
 	}

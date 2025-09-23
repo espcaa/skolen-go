@@ -39,6 +39,11 @@ func parseTime(str string) time.Time {
 }
 
 func (c *Client) GetTimetable(userID, schoolID, emsCode string, periodStart, periodEnd time.Time, limit int) ([]types.TimetableDay, error) {
+	// Ensure we have a valid token before making the API call
+	if err := c.EnsureValidToken(); err != nil {
+		return nil, fmt.Errorf("failed to refresh token: %w", err)
+	}
+
 	if periodStart.IsZero() {
 		periodStart = time.Now()
 	}
