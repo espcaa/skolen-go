@@ -39,6 +39,12 @@ func parseTime(str string) time.Time {
 }
 
 func (c *Client) GetTimetable(userID, schoolID, emsCode string, periodStart, periodEnd time.Time, limit int) ([]types.TimetableDay, error) {
+
+	refreshTokenErr := RefreshAccessToken(c)
+	if refreshTokenErr != nil {
+		return nil, refreshTokenErr
+	}
+
 	if periodStart.IsZero() {
 		periodStart = time.Now()
 	}
