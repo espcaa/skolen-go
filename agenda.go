@@ -39,6 +39,11 @@ func parseTime(str string) time.Time {
 }
 
 func (c *Client) GetTimetable(userID, schoolID, emsCode string, periodStart, periodEnd time.Time, limit int) ([]types.TimetableDay, error) {
+	// Ensure we have a valid token before making the API call
+	if err := c.EnsureValidToken(); err != nil {
+		return nil, fmt.Errorf("failed to refresh token: %w", err)
+	}
+
 	if periodStart.IsZero() {
 		periodStart = time.Now()
 	}
@@ -71,6 +76,31 @@ func (c *Client) GetTimetable(userID, schoolID, emsCode string, periodStart, per
 		return nil, err
 	}
 	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		// If we get 401 Unauthorized, try refreshing the token once more
+		if resp.StatusCode == 401 && c.TokenSet.RefreshToken != "" {
+			if refreshErr := RefreshAccessToken(c); refreshErr == nil {
+				// Token refreshed successfully, retry the request
+				req.Header.Set("Authorization", "Bearer "+c.TokenSet.AccessToken)
+				resp2, err2 := c.HTTP.Do(req)
+				if err2 != nil {
+					return nil, err2
+				}
+				defer resp2.Body.Close()
+				if resp2.StatusCode == 200 {
+					// Use the new response
+					resp = resp2
+				} else {
+					return nil, fmt.Errorf("unexpected status %d after token refresh", resp2.StatusCode)
+				}
+			} else {
+				return nil, fmt.Errorf("unexpected status %d and failed to refresh token: %v", resp.StatusCode, refreshErr)
+			}
+		} else {
+			return nil, fmt.Errorf("unexpected status %d", resp.StatusCode)
+		}
+	}
 
 	var baseResp BaseResponse
 	if err := json.NewDecoder(resp.Body).Decode(&baseResp); err != nil {
