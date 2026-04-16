@@ -68,11 +68,9 @@ func NewClientFromJSON(data []byte) (*Client, error) {
 		Timeout: 10 * time.Second,
 	}
 
-	issuer := client.School.EmsOIDCWellKnownURL
-	if idx := strings.Index(issuer, "/.well-known"); idx != -1 {
-		issuer = issuer[:idx]
+	if idx := strings.Index(client.School.EmsOIDCWellKnownURL, "/.well-known"); idx != -1 {
+		client.School.EmsOIDCWellKnownURL = client.School.EmsOIDCWellKnownURL[:idx]
 	}
-	_ = issuer
 
 	client.BaseURL = "https://api.skolengo.com/api/v1/bff-sko-app"
 
