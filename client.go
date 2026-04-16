@@ -2,7 +2,9 @@ package skolengo
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/espcaa/skolen-go/types"
@@ -66,13 +68,23 @@ func NewClientFromJSON(data []byte) (*Client, error) {
 		Timeout: 10 * time.Second,
 	}
 
+	issuer := client.School.EmsOIDCWellKnownURL
+	if idx := strings.Index(issuer, "/.well-known"); idx != -1 {
+		issuer = issuer[:idx]
+	}
+	_ = issuer
+
 	client.BaseURL = "https://api.skolengo.com/api/v1/bff-sko-app"
 
 	client.OIDCClient.ClientID = SkolenGoConstants.OIDCClientID
 	client.OIDCClient.ClientSecret = SkolenGoConstants.OIDCClientSecret
 	client.OIDCClient.RedirectURI = SkolenGoConstants.RedirectURI
 
-	// get userinfo
+	if time.Now().After(client.TokenSet.ExpiresAt) {
+		if err := RefreshAccessToken(&client); err != nil {
+			return nil, fmt.Errorf("token refresh failed: %w", err)
+		}
+	}
 
 	var userInfo, err = client.GetBasicUserInfo()
 	if err != nil {

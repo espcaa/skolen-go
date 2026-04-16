@@ -32,8 +32,6 @@ func (c *Client) GetBasicUserInfo() (*types.UserInfo, error) {
 	baseUrl := strings.TrimRight(c.BaseURL, "/")
 	endpoint := fmt.Sprintf("%s/users-info/%s", baseUrl, userID)
 
-	fmt.Println(endpoint)
-
 	query := url.Values{}
 	query.Set("include", "school,students,students.school,schools,prioritySchool")
 	query.Set("fields[userInfo]", "lastName,firstName,photoUrl,externalMail,mobilePhone,audienceId,permissions")

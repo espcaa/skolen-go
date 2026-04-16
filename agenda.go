@@ -40,9 +40,10 @@ func parseTime(str string) time.Time {
 
 func (c *Client) GetTimetable(userID, schoolID, emsCode string, periodStart, periodEnd time.Time, limit int) ([]types.TimetableDay, error) {
 
-	refreshTokenErr := RefreshAccessToken(c)
-	if refreshTokenErr != nil {
-		return nil, refreshTokenErr
+	if time.Now().After(c.TokenSet.ExpiresAt) {
+		if err := RefreshAccessToken(c); err != nil {
+			return nil, fmt.Errorf("token refresh failed: %w", err)
+		}
 	}
 
 	if periodStart.IsZero() {
